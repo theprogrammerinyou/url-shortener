@@ -10,6 +10,7 @@ A simple URL shortener built with .NET 10.0 using a clean architecture approach.
 - Unit tests for core service and repository functionality
 
 ## Project Structure
+- `Client` - contains the react code combined with MUI and React Router
 - `UrlShortener.Api` - ASP.NET Core Web API host
 - `UrlShortener.Core` - domain models, service interfaces, DTOs, and business logic
 - `UrlShortener.Infrastructure` - concrete repository and short-code generator implementations
