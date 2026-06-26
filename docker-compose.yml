@@ -1,0 +1,25 @@
+services:
+  api:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    ports:
+      - "${API_PORT:-5001}:8080"
+    environment:
+      - ASPNETCORE_ENVIRONMENT=Development
+      - ConnectionStrings__DefaultConnection=${CONNECTIONSTRINGS__DEFAULTCONNECTION}
+      - ConnectionStrings__Redis=${CONNECTIONSTRINGS__REDIS}
+      - ConnectionStrings__Neon=${CONNECTIONSTRINGS__NEON}
+      - AppSettings__BaseUrl=${APPSETTINGS__BASEURL}
+      - AppSettings__ApiUrl=${APPSETTINGS__APIURL}
+      - AppSettings__FrontendUrl=${APPSETTINGS__FRONTENDURL}
+    depends_on:
+      redis:
+        condition: service_started
+
+  redis:
+    image: redis:8
+    restart: unless-stopped
+    ports:
+      - "6379:6379"
+    command: ["redis-server", "--save", "", "--appendonly", "no"]

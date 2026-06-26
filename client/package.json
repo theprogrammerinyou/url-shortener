@@ -1,0 +1,44 @@
+{
+  "name": "url-shortener-client",
+  "version": "0.1.0",
+  "private": true,
+  "dependencies": {
+    "@emotion/react": "^11.12.1",
+    "@emotion/styled": "^11.12.0",
+    "@mui/icons-material": "^5.15.0",
+    "@mui/material": "^5.15.0",
+    "@mui/x-date-pickers": "^6.0.0",
+    "@types/react-router-dom": "^5.3.3",
+    "axios": "^1.6.5",
+    "date-fns": "^2.30.0",
+    "react": "^18.3.1",
+    "react-dom": "^18.3.1",
+    "react-qr-code": "^2.2.0",
+    "react-router-dom": "^7.18.0",
+    "react-scripts": "5.0.1",
+    "recharts": "^3.9.0"
+  },
+  "devDependencies": {
+    "@types/react": "^18.3.3",
+    "@types/react-dom": "^18.3.0",
+    "typescript": "^4.9.5"
+  },
+  "scripts": {
+    "start": "react-scripts start",
+    "build": "react-scripts build",
+    "test": "react-scripts test --env=jsdom",
+    "eject": "react-scripts eject"
+  },
+  "browserslist": {
+    "production": [
+      ">0.2%",
+      "not dead",
+      "not op_mini all"
+    ],
+    "development": [
+      "last 1 chrome version",
+      "last 1 firefox version",
+      "last 1 safari version"
+    ]
+  }
+}

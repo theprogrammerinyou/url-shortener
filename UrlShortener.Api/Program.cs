@@ -1,0 +1,186 @@
+using System.Text;
+using Microsoft.AspNetCore.Authentication.JwtBearer;
+using Microsoft.EntityFrameworkCore;
+using Microsoft.IdentityModel.Tokens;
+using Npgsql;
+using UrlShortener.Core.Contracts;
+using UrlShortener.Core.Services;
+using UrlShortener.Infrastructure;
+using UrlShortener.Infrastructure.Services;
+
+var builder = WebApplication.CreateBuilder(args);
+
+var frontendUrl = builder.Configuration["AppSettings:FrontendUrl"];
+var apiUrl = builder.Configuration["AppSettings:ApiUrl"];
+var baseUrl = builder.Configuration["AppSettings:BaseUrl"];
+if (string.IsNullOrWhiteSpace(frontendUrl))
+    throw new InvalidOperationException("Missing configuration: AppSettings:FrontendUrl");
+if (string.IsNullOrWhiteSpace(apiUrl))
+    throw new InvalidOperationException("Missing configuration: AppSettings:ApiUrl");
+if (string.IsNullOrWhiteSpace(baseUrl))
+    throw new InvalidOperationException("Missing configuration: AppSettings:BaseUrl");
+
+// ── JWT Settings ───────────────────────────────────────────────────────────
+var jwtKey = builder.Configuration["JwtSettings:Key"]
+    ?? throw new InvalidOperationException("Missing configuration: JwtSettings:Key");
+var jwtIssuer = builder.Configuration["JwtSettings:Issuer"] ?? "LinkSwift";
+var jwtAudience = builder.Configuration["JwtSettings:Audience"] ?? "LinkSwiftClient";
+var jwtExpiryHours = int.TryParse(builder.Configuration["JwtSettings:ExpiryHours"], out var h) ? h : 720;
+
+builder.Services
+    .AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
+    .AddJwtBearer(options =>
+    {
+        options.TokenValidationParameters = new TokenValidationParameters
+        {
+            ValidateIssuer = true,
+            ValidateAudience = true,
+            ValidateLifetime = true,
+            ValidateIssuerSigningKey = true,
+            ValidIssuer = jwtIssuer,
+            ValidAudience = jwtAudience,
+            IssuerSigningKey = new SymmetricSecurityKey(Encoding.UTF8.GetBytes(jwtKey)),
+            ClockSkew = TimeSpan.Zero,
+        };
+    });
+
+// ── CORS ───────────────────────────────────────────────────────────────────
+builder.Services.AddCors(options =>
+{
+    options.AddPolicy("AllowLocalDev", policy =>
+    {
+        policy.WithOrigins(frontendUrl, apiUrl)
+              .AllowAnyHeader()
+              .AllowAnyMethod();
+    });
+});
+
+builder.Services.AddControllers();
+
+// ── Database ───────────────────────────────────────────────────────────────
+var neonConnectionString = builder.Configuration.GetConnectionString("Neon");
+var defaultConnectionString = builder.Configuration.GetConnectionString("DefaultConnection");
+var redisConnectionString = builder.Configuration.GetConnectionString("Redis");
+if (string.IsNullOrWhiteSpace(defaultConnectionString))
+    throw new InvalidOperationException("Missing connection string: DefaultConnection");
+if (string.IsNullOrWhiteSpace(redisConnectionString))
+    throw new InvalidOperationException("Missing connection string: Redis");
+
+var connectionString = !string.IsNullOrWhiteSpace(neonConnectionString)
+    ? new NpgsqlConnectionStringBuilder(neonConnectionString)
+    {
+        SslMode = SslMode.Require,
+        TrustServerCertificate = true
+    }.ConnectionString
+    : defaultConnectionString;
+
+builder.Services.AddDbContext<UrlShortenerDbContext>(options => options.UseNpgsql(connectionString));
+builder.Services.AddStackExchangeRedisCache(options => options.Configuration = redisConnectionString);
+
+// ── Application Services ───────────────────────────────────────────────────
+builder.Services.AddScoped<IUrlRepository, EntityFrameworkUrlRepository>();
+builder.Services.AddScoped<IClickEventRepository, EntityFrameworkClickEventRepository>();
+builder.Services.AddScoped<IUserProfileRepository, EntityFrameworkUserProfileRepository>();
+builder.Services.AddSingleton<IKeyGenerator, Base62KeyGenerator>();
+builder.Services.AddScoped<IUrlShortenerService>(sp =>
+{
+    var repository = sp.GetRequiredService<IUrlRepository>();
+    var generator = sp.GetRequiredService<IKeyGenerator>();
+    var clickEvents = sp.GetRequiredService<IClickEventRepository>();
+    var cache = sp.GetService<Microsoft.Extensions.Caching.Distributed.IDistributedCache>();
+    return new UrlShortenerService(repository, generator, clickEvents, baseUrl, cache);
+});
+builder.Services.AddScoped<IDashboardService, DashboardService>();
+builder.Services.AddScoped<IAnalyticsService>(sp =>
+{
+    var repository = sp.GetRequiredService<IUrlRepository>();
+    var clickEvents = sp.GetRequiredService<IClickEventRepository>();
+    return new AnalyticsService(repository, clickEvents, baseUrl);
+});
+builder.Services.AddScoped<IUserService, UserService>();
+
+// ── Auth Service ───────────────────────────────────────────────────────────
+builder.Services.AddScoped<IAuthService>(sp =>
+    new AuthService(
+        sp.GetRequiredService<UrlShortenerDbContext>(),
+        jwtKey,
+        jwtIssuer,
+        jwtAudience,
+        jwtExpiryHours
+    )
+);
+
+var app = builder.Build();
+
+// ── DB Schema ──────────────────────────────────────────────────────────────
+using (var scope = app.Services.CreateScope())
+{
+    var dbContext = scope.ServiceProvider.GetRequiredService<UrlShortenerDbContext>();
+    dbContext.Database.EnsureCreated();
+    await ApplySchemaUpdatesAsync(dbContext);
+}
+
+// ── Middleware Pipeline ────────────────────────────────────────────────────
+app.UseCors("AllowLocalDev");
+app.UseMiddleware<UrlShortener.Api.Middleware.ExceptionHandlingMiddleware>();
+app.UseHttpsRedirection();
+app.UseAuthentication();
+
+// Custom JWT middleware — populates HttpContext.User & Items from Bearer token
+app.Use(async (context, next) =>
+{
+    var middleware = new UrlShortener.Api.Middleware.JwtAuthMiddleware(
+        next,
+        context.RequestServices.GetRequiredService<ILogger<UrlShortener.Api.Middleware.JwtAuthMiddleware>>(),
+        jwtKey,
+        jwtIssuer,
+        jwtAudience);
+    await middleware.InvokeAsync(context);
+});
+
+app.UseAuthorization();
+app.MapControllers();
+
+app.Run();
+
+static async Task ApplySchemaUpdatesAsync(UrlShortenerDbContext dbContext)
+{
+    const string sql = """
+        ALTER TABLE IF EXISTS "UrlMappings" ADD COLUMN IF NOT EXISTS "IsPrivate" boolean NOT NULL DEFAULT false;
+        ALTER TABLE IF EXISTS "UrlMappings" ADD COLUMN IF NOT EXISTS "QrScanCount" integer NOT NULL DEFAULT 0;
+        CREATE TABLE IF NOT EXISTS "ClickEvents" (
+            "Id" uuid NOT NULL PRIMARY KEY,
+            "ShortCode" character varying(100) NOT NULL,
+            "ClickedAt" timestamp with time zone NOT NULL,
+            "Referrer" text NULL,
+            "Country" text NULL
+        );
+        CREATE INDEX IF NOT EXISTS "IX_ClickEvents_ShortCode" ON "ClickEvents" ("ShortCode");
+        CREATE INDEX IF NOT EXISTS "IX_ClickEvents_ClickedAt" ON "ClickEvents" ("ClickedAt");
+        CREATE TABLE IF NOT EXISTS "UserProfiles" (
+            "UserId" character varying(100) NOT NULL PRIMARY KEY,
+            "DisplayName" character varying(200) NOT NULL,
+            "Email" character varying(200) NOT NULL,
+            "DefaultDomain" character varying(100) NOT NULL,
+            "ApiKey" character varying(100) NOT NULL,
+            "Theme" character varying(20) NOT NULL,
+            "WeeklyAnalyticsReport" boolean NOT NULL DEFAULT true,
+            "LinkThresholdAlerts" boolean NOT NULL DEFAULT true,
+            "NewDeviceLogin" boolean NOT NULL DEFAULT false,
+            "CompactView" boolean NOT NULL DEFAULT false,
+            "CreatedAt" timestamp with time zone NOT NULL
+        );
+        CREATE TABLE IF NOT EXISTS "AppUsers" (
+            "Id" uuid NOT NULL PRIMARY KEY,
+            "Name" character varying(200) NOT NULL,
+            "Email" character varying(200) NOT NULL,
+            "PasswordHash" text NOT NULL,
+            "CreatedAt" timestamp with time zone NOT NULL,
+            "LastLoginAt" timestamp with time zone NULL,
+            "Plan" character varying(50) NOT NULL DEFAULT 'free'
+        );
+        CREATE UNIQUE INDEX IF NOT EXISTS "IX_AppUsers_Email" ON "AppUsers" ("Email");
+        """;
+
+    await dbContext.Database.ExecuteSqlRawAsync(sql);
+}
