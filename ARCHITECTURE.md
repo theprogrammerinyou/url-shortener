@@ -7,7 +7,7 @@ This document details the software architecture, design patterns, component work
 ## 1. Swagger UI URL
 
 The interactive Swagger API documentation can be accessed at:
-*   **Local Development**: `https://localhost:5001/swagger`
+*   **Local Development**: `http://localhost:5001/swagger`
 *   **Production Deployment**: `https://linkswift-api.onrender.com/swagger`
 
 ---
