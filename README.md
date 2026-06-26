@@ -24,10 +24,9 @@ A simple URL shortener built with .NET 10.0 using a clean architecture approach.
    ```bash
    dotnet run --project UrlShortener.Api/UrlShortener.Api.csproj
    ```
-3. Open Swagger UI:
-   ```
-   https://localhost:5001/swagger/index.html
-   ```
+ 3. Open Swagger UI:
+   - **Local Development**: `https://localhost:5001/swagger/index.html`
+   - **Production (Render)**: `https://linkswift-api.onrender.com/swagger/index.html`
 
 ## Running tests
 ```bash
