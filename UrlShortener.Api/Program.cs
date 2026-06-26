@@ -75,9 +75,10 @@ var rawConnectionString = !string.IsNullOrWhiteSpace(neonConnectionString)
     : defaultConnectionString;
 
 var connectionString = ConvertPostgresUriToConnectionString(rawConnectionString);
+var formattedRedisConnectionString = ConvertRedisUriToStackExchangeFormat(redisConnectionString);
 
 builder.Services.AddDbContext<UrlShortenerDbContext>(options => options.UseNpgsql(connectionString));
-builder.Services.AddStackExchangeRedisCache(options => options.Configuration = redisConnectionString);
+builder.Services.AddStackExchangeRedisCache(options => options.Configuration = formattedRedisConnectionString);
 
 // ── Application Services ───────────────────────────────────────────────────
 builder.Services.AddScoped<IUrlRepository, EntityFrameworkUrlRepository>();
@@ -255,6 +256,51 @@ static string ConvertPostgresUriToConnectionString(string connectionString)
             };
 
             return builder.ConnectionString;
+        }
+        catch
+        {
+            return connectionString;
+        }
+    }
+
+    return connectionString;
+}
+
+static string ConvertRedisUriToStackExchangeFormat(string connectionString)
+{
+    if (string.IsNullOrWhiteSpace(connectionString))
+    {
+        return connectionString;
+    }
+
+    if (connectionString.StartsWith("rediss://", StringComparison.OrdinalIgnoreCase) ||
+        connectionString.StartsWith("redis://", StringComparison.OrdinalIgnoreCase))
+    {
+        try
+        {
+            var uri = new Uri(connectionString);
+            var host = uri.Host;
+            var port = uri.Port > 0 ? uri.Port : 6379;
+            var ssl = uri.Scheme.Equals("rediss", StringComparison.OrdinalIgnoreCase);
+            
+            var password = uri.UserInfo;
+            if (!string.IsNullOrEmpty(password) && password.Contains(':'))
+            {
+                password = password.Split(':')[1];
+            }
+
+            var parts = new List<string> { $"{host}:{port}" };
+            if (!string.IsNullOrEmpty(password))
+            {
+                parts.Add($"password={password}");
+            }
+            if (ssl)
+            {
+                parts.Add("ssl=true");
+            }
+            parts.Add("abortConnect=false");
+
+            return string.Join(",", parts);
         }
         catch
         {
