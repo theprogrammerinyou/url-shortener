@@ -66,13 +66,11 @@ if (string.IsNullOrWhiteSpace(defaultConnectionString))
 if (string.IsNullOrWhiteSpace(redisConnectionString))
     throw new InvalidOperationException("Missing connection string: Redis");
 
-var connectionString = !string.IsNullOrWhiteSpace(neonConnectionString)
-    ? new NpgsqlConnectionStringBuilder(neonConnectionString)
-    {
-        SslMode = SslMode.Require,
-        TrustServerCertificate = true
-    }.ConnectionString
+var rawConnectionString = !string.IsNullOrWhiteSpace(neonConnectionString)
+    ? neonConnectionString
     : defaultConnectionString;
+
+var connectionString = ConvertPostgresUriToConnectionString(rawConnectionString);
 
 builder.Services.AddDbContext<UrlShortenerDbContext>(options => options.UseNpgsql(connectionString));
 builder.Services.AddStackExchangeRedisCache(options => options.Configuration = redisConnectionString);
@@ -183,4 +181,46 @@ static async Task ApplySchemaUpdatesAsync(UrlShortenerDbContext dbContext)
         """;
 
     await dbContext.Database.ExecuteSqlRawAsync(sql);
+}
+
+static string ConvertPostgresUriToConnectionString(string connectionString)
+{
+    if (string.IsNullOrWhiteSpace(connectionString))
+    {
+        return connectionString;
+    }
+
+    if (connectionString.StartsWith("postgresql://", StringComparison.OrdinalIgnoreCase) ||
+        connectionString.StartsWith("postgres://", StringComparison.OrdinalIgnoreCase))
+    {
+        try
+        {
+            var uri = new Uri(connectionString);
+            var userInfo = uri.UserInfo.Split(':');
+            var username = userInfo[0];
+            var password = userInfo.Length > 1 ? userInfo[1] : "";
+            var host = uri.Host;
+            var port = uri.Port > 0 ? uri.Port : 5432;
+            var database = uri.AbsolutePath.TrimStart('/');
+
+            var builder = new NpgsqlConnectionStringBuilder
+            {
+                Host = host,
+                Port = port,
+                Database = database,
+                Username = username,
+                Password = password,
+                SslMode = SslMode.Require,
+                TrustServerCertificate = true
+            };
+
+            return builder.ConnectionString;
+        }
+        catch
+        {
+            return connectionString;
+        }
+    }
+
+    return connectionString;
 }
