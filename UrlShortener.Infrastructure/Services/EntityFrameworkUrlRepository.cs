@@ -37,11 +37,13 @@ public sealed class EntityFrameworkUrlRepository : IUrlRepository
 
     public async Task<IEnumerable<UrlEntry>> GetAllAsync(string? userId = null)
     {
-        var query = _dbContext.UrlMappings.AsQueryable();
-        if (!string.IsNullOrWhiteSpace(userId))
+        if (string.IsNullOrWhiteSpace(userId))
         {
-            query = query.Where(x => x.UserId == userId);
+            return Enumerable.Empty<UrlEntry>();
         }
+
+        var query = _dbContext.UrlMappings.AsQueryable();
+        query = query.Where(x => x.UserId == userId);
 
         return await query.OrderByDescending(x => x.CreatedAt).ToArrayAsync();
     }
@@ -53,13 +55,15 @@ public sealed class EntityFrameworkUrlRepository : IUrlRepository
         int page,
         int pageSize)
     {
+        if (string.IsNullOrWhiteSpace(userId))
+        {
+            return (Enumerable.Empty<UrlEntry>(), 0);
+        }
+
         var query = _dbContext.UrlMappings.AsQueryable();
         var now = DateTime.UtcNow;
 
-        if (!string.IsNullOrWhiteSpace(userId))
-        {
-            query = query.Where(x => x.UserId == userId);
-        }
+        query = query.Where(x => x.UserId == userId);
 
         if (!string.IsNullOrWhiteSpace(search))
         {
@@ -90,11 +94,13 @@ public sealed class EntityFrameworkUrlRepository : IUrlRepository
 
     public async Task<IReadOnlyList<UrlEntry>> GetRecentAsync(string? userId, int limit)
     {
-        var query = _dbContext.UrlMappings.AsQueryable();
-        if (!string.IsNullOrWhiteSpace(userId))
+        if (string.IsNullOrWhiteSpace(userId))
         {
-            query = query.Where(x => x.UserId == userId);
+            return Array.Empty<UrlEntry>();
         }
+
+        var query = _dbContext.UrlMappings.AsQueryable();
+        query = query.Where(x => x.UserId == userId);
 
         return await query
             .OrderByDescending(x => x.CreatedAt)

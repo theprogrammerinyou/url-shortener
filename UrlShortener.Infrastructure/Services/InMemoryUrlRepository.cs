@@ -48,11 +48,13 @@ public sealed class InMemoryUrlRepository : IUrlRepository
 
     public Task<IEnumerable<UrlEntry>> GetAllAsync(string? userId = null)
     {
-        var values = _urls.Values.AsEnumerable();
-        if (!string.IsNullOrWhiteSpace(userId))
+        if (string.IsNullOrWhiteSpace(userId))
         {
-            values = values.Where(x => string.Equals(x.UserId, userId, StringComparison.OrdinalIgnoreCase));
+            return Task.FromResult<IEnumerable<UrlEntry>>(Enumerable.Empty<UrlEntry>());
         }
+
+        var values = _urls.Values.AsEnumerable();
+        values = values.Where(x => string.Equals(x.UserId, userId, StringComparison.OrdinalIgnoreCase));
 
         return Task.FromResult<IEnumerable<UrlEntry>>(values.OrderBy(x => x.CreatedAt).ToArray());
     }
@@ -64,13 +66,15 @@ public sealed class InMemoryUrlRepository : IUrlRepository
         int page,
         int pageSize)
     {
+        if (string.IsNullOrWhiteSpace(userId))
+        {
+            return Task.FromResult<(IEnumerable<UrlEntry>, int)>((Enumerable.Empty<UrlEntry>(), 0));
+        }
+
         var values = _urls.Values.AsEnumerable();
         var now = DateTime.UtcNow;
 
-        if (!string.IsNullOrWhiteSpace(userId))
-        {
-            values = values.Where(x => string.Equals(x.UserId, userId, StringComparison.OrdinalIgnoreCase));
-        }
+        values = values.Where(x => string.Equals(x.UserId, userId, StringComparison.OrdinalIgnoreCase));
 
         if (!string.IsNullOrWhiteSpace(search))
         {
@@ -96,11 +100,13 @@ public sealed class InMemoryUrlRepository : IUrlRepository
 
     public Task<IReadOnlyList<UrlEntry>> GetRecentAsync(string? userId, int limit)
     {
-        var values = _urls.Values.AsEnumerable();
-        if (!string.IsNullOrWhiteSpace(userId))
+        if (string.IsNullOrWhiteSpace(userId))
         {
-            values = values.Where(x => string.Equals(x.UserId, userId, StringComparison.OrdinalIgnoreCase));
+            return Task.FromResult<IReadOnlyList<UrlEntry>>(Array.Empty<UrlEntry>());
         }
+
+        var values = _urls.Values.AsEnumerable();
+        values = values.Where(x => string.Equals(x.UserId, userId, StringComparison.OrdinalIgnoreCase));
 
         return Task.FromResult<IReadOnlyList<UrlEntry>>(
             values.OrderByDescending(x => x.CreatedAt).Take(limit).ToList());

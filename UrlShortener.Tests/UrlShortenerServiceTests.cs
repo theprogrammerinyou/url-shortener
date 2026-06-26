@@ -57,10 +57,10 @@ public class UrlShortenerServiceTests
     public async Task GetAllUrlsAsync_ShouldReturnAllCreatedMappings()
     {
         var service = CreateService();
-        await service.CreateShortUrlAsync(new CreateShortUrlRequest { LongUrl = "https://example.com/page1" });
-        await service.CreateShortUrlAsync(new CreateShortUrlRequest { LongUrl = "https://example.com/page2" });
+        await service.CreateShortUrlAsync(new CreateShortUrlRequest { LongUrl = "https://example.com/page1", UserId = "user1" });
+        await service.CreateShortUrlAsync(new CreateShortUrlRequest { LongUrl = "https://example.com/page2", UserId = "user1" });
 
-        var results = await service.GetAllUrlsAsync();
+        var results = await service.GetAllUrlsAsync("user1");
 
         Assert.NotNull(results);
         Assert.Equal(2, results.Count());

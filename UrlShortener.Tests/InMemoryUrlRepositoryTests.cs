@@ -36,10 +36,10 @@ public class InMemoryUrlRepositoryTests
     {
         var repository = new InMemoryUrlRepository();
 
-        await repository.AddAsync(new UrlEntry("abc1234", "https://example.com/page1", DateTime.UtcNow.AddDays(30)));
-        await repository.AddAsync(new UrlEntry("def5678", "https://example.com/page2", DateTime.UtcNow.AddDays(30)));
+        await repository.AddAsync(new UrlEntry("abc1234", "https://example.com/page1", DateTime.UtcNow.AddDays(30), userId: "user1"));
+        await repository.AddAsync(new UrlEntry("def5678", "https://example.com/page2", DateTime.UtcNow.AddDays(30), userId: "user1"));
 
-        var results = await repository.GetAllAsync();
+        var results = await repository.GetAllAsync("user1");
 
         Assert.Equal(2, results.Count());
     }
