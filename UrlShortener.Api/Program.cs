@@ -45,11 +45,15 @@ builder.Services
     });
 
 // ── CORS ───────────────────────────────────────────────────────────────────
+var allowedOrigins = frontendUrl.Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
+    .Concat(apiUrl.Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries))
+    .ToArray();
+
 builder.Services.AddCors(options =>
 {
     options.AddPolicy("AllowLocalDev", policy =>
     {
-        policy.WithOrigins(frontendUrl, apiUrl)
+        policy.WithOrigins(allowedOrigins)
               .AllowAnyHeader()
               .AllowAnyMethod();
     });
