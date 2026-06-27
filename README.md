@@ -2,12 +2,21 @@
 
 A simple URL shortener built with .NET 10.0 using a clean architecture approach.
 
-## Features
-- Shorten long URLs
-- Redirect short codes to original URLs
-- In-memory storage for rapid prototyping
-- Swagger/OpenAPI documentation
-- Unit tests for core service and repository functionality
+## Features & Scenarios
+
+### Greenfield Scenarios (New Systems/Features)
+- **Generate Shorter URL**: Instantly converts any long URL into a compact, shareable short code. Includes duplicate prevention where the same URL for a user yields the same short link.
+- **Login and Signup**: Complete user authentication using JWT Bearer tokens to secure dashboards, manage user preferences, and assign private links.
+- **Workspace Settings**: Managed profile, masking API key regeneration, and custom theme switches.
+
+### Brownfield Scenarios (Enhancements, Refactors, & Bug Fixes)
+- **Set Expiration Time**: Users can optionally define custom expiration timestamps for their links; expired codes automatically return a 404.
+- **Generate QR Code**: Built-in visual QR code generator for easy offline-to-online sharing with dedicated scan count tracking.
+- **Cache Data for Faster Retrieval**: Implemented the cache-aside pattern using Redis to store and resolve url mapping definitions instantly, mitigating database bottlenecks.
+- **Analytics with Click Count**: Full-featured analytics dashboard documenting click counts today, engagement growth over time, geolocation maps, and top referral sources.
+- **Privacy Controls**: Custom aliases validation and private links toggling to hide links from public directories.
+- **Refactoring to Low-Level Design (LLD)**: Restructured core models (e.g. `UrlEntry` replacing `UrlMapping`), abstractions (e.g. `IUrlRepository` and `IKeyGenerator`), and repositories mapping to Neon serverless PostgreSQL.
+- **Secure Guest Access**: Secured data retrieval ensuring a user's local IP-based unique guest fingerprint restricts access so they cannot see another user's links.
 
 ## Project Structure
 - `Client` - contains the react code combined with MUI and React Router
