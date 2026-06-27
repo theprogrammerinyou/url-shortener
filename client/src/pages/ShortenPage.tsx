@@ -3,7 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import {
   Box, Typography, Paper, TextField, Button, Checkbox, FormControlLabel,
   IconButton, Alert, Dialog, DialogTitle, DialogContent, DialogActions,
-  FormControl, InputLabel, Select, MenuItem, Skeleton
+  FormControl, InputLabel, Select, MenuItem, Skeleton, CircularProgress
 } from '@mui/material';
 import LinkIcon from '@mui/icons-material/Link';
 import ContentCopyIcon from '@mui/icons-material/ContentCopy';
@@ -40,6 +40,7 @@ export default function ShortenPage() {
   const [initialLoading, setInitialLoading] = useState(true);
   const [recent, setRecent] = useState<UrlDetailsResponse[]>([]);
   const [summary, setSummary] = useState<DashboardSummaryResponse | null>(null);
+  const [deletingCode, setDeletingCode] = useState<string | null>(null);
 
   // Success Dialog State
   const [successOpen, setSuccessOpen] = useState(false);
@@ -142,9 +143,16 @@ export default function ShortenPage() {
   };
 
   const handleDelete = async (shortCode: string) => {
-    await urlApi.delete(shortCode, userId);
-    showSnackbar('Link deleted');
-    await loadData();
+    setDeletingCode(shortCode);
+    try {
+      await urlApi.delete(shortCode, userId);
+      showSnackbar('Link deleted');
+      await loadData();
+    } catch (err) {
+      showSnackbar('Failed to delete link');
+    } finally {
+      setDeletingCode(null);
+    }
   };
 
   const linkIcons = [<PublicIcon />, <CampaignIcon />];
@@ -289,57 +297,95 @@ export default function ShortenPage() {
               <Typography color="text.secondary">No links yet. Shorten your first URL above!</Typography>
             </Paper>
           ) : (
-            recent.map((link, i) => (
-            <Paper key={link.shortCode} sx={{ p: 2.5, borderRadius: 3, display: 'flex', alignItems: 'center', gap: 2, border: '1px solid', borderColor: 'divider' }}>
-              <Box sx={{
-                width: 48, height: 48, borderRadius: 2, bgcolor: 'secondary.main',
-                display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'primary.main',
-              }}>
-                {linkIcons[i % linkIcons.length]}
-              </Box>
-              <Box sx={{ flex: 1, minWidth: 0 }}>
-                <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-                  <Typography 
-                    variant="subtitle2" 
-                    color="primary.main" 
-                    fontWeight={700} 
-                    noWrap
-                    sx={{ 
-                      cursor: 'pointer',
-                      '&:hover': { textDecoration: 'underline' }
-                    }}
-                    onClick={() => window.open(link.shortUrl, '_blank', 'noopener,noreferrer')}
-                  >
-                    {link.shortUrl.replace(/^https?:\/\//, '')}
-                  </Typography>
-                  <IconButton size="small" onClick={() => {
-                    setQrViewUrl(link.shortUrl);
-                    setQrViewOpen(true);
-                  }} title="QR Code" sx={{ p: 0.5 }}>
-                    <QrCode2Icon sx={{ fontSize: 16 }} />
-                  </IconButton>
-                  <IconButton size="small" onClick={() => handleCopy(link.shortUrl)} title="Copy" sx={{ p: 0.5 }}>
-                    <ContentCopyIcon sx={{ fontSize: 16 }} />
-                  </IconButton>
-                </Box>
-                <Typography variant="caption" color="text.secondary" noWrap display="block">
-                  {link.longUrl}
-                </Typography>
-              </Box>
-              <Box sx={{ textAlign: 'center', minWidth: 80 }}>
-                <Typography variant="caption" color="text.secondary" display="block">TOTAL CLICKS</Typography>
-                <Typography variant="h6" fontWeight={800}>{formatClicks(link.clickCount)}</Typography>
-              </Box>
-              <Box sx={{ display: 'flex', gap: 0.5 }}>
-                <IconButton size="small" onClick={() => navigate(`/analytics/${link.shortCode}`)} title="Analytics">
-                  <BarChartIcon fontSize="small" />
-                </IconButton>
-                <IconButton size="small" onClick={() => handleDelete(link.shortCode)} title="Delete" color="error">
-                  <DeleteOutlineIcon fontSize="small" />
-                </IconButton>
-              </Box>
-            </Paper>
-            ))
+            recent.map((link, i) => {
+              const isThisDeleting = deletingCode === link.shortCode;
+              const isAnyDeleting = deletingCode !== null;
+
+              return (
+                <Paper key={link.shortCode} sx={{ p: 2.5, borderRadius: 3, display: 'flex', alignItems: 'center', gap: 2, border: '1px solid', borderColor: 'divider', opacity: isThisDeleting ? 0.7 : 1 }}>
+                  <Box sx={{
+                    width: 48, height: 48, borderRadius: 2, bgcolor: 'secondary.main',
+                    display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'primary.main',
+                  }}>
+                    {linkIcons[i % linkIcons.length]}
+                  </Box>
+                  <Box sx={{ flex: 1, minWidth: 0 }}>
+                    <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                      <Typography 
+                        variant="subtitle2" 
+                        color={isAnyDeleting ? "text.disabled" : "primary.main"} 
+                        fontWeight={700} 
+                        noWrap
+                        sx={{ 
+                          cursor: isAnyDeleting ? 'default' : 'pointer',
+                          '&:hover': { textDecoration: isAnyDeleting ? 'none' : 'underline' }
+                        }}
+                        onClick={() => {
+                          if (!isAnyDeleting) {
+                            window.open(link.shortUrl, '_blank', 'noopener,noreferrer');
+                          }
+                        }}
+                      >
+                        {link.shortUrl.replace(/^https?:\/\//, '')}
+                      </Typography>
+                      <IconButton 
+                        size="small" 
+                        disabled={isAnyDeleting}
+                        onClick={() => {
+                          setQrViewUrl(link.shortUrl);
+                          setQrViewOpen(true);
+                        }} 
+                        title="QR Code" 
+                        sx={{ p: 0.5 }}
+                      >
+                        <QrCode2Icon sx={{ fontSize: 16 }} />
+                      </IconButton>
+                      <IconButton 
+                        size="small" 
+                        disabled={isAnyDeleting}
+                        onClick={() => handleCopy(link.shortUrl)} 
+                        title="Copy" 
+                        sx={{ p: 0.5 }}
+                      >
+                        <ContentCopyIcon sx={{ fontSize: 16 }} />
+                      </IconButton>
+                    </Box>
+                    <Typography variant="caption" color="text.secondary" noWrap display="block">
+                      {link.longUrl}
+                    </Typography>
+                  </Box>
+                  <Box sx={{ textAlign: 'center', minWidth: 80 }}>
+                    <Typography variant="caption" color="text.secondary" display="block">TOTAL CLICKS</Typography>
+                    <Typography variant="h6" fontWeight={800}>{formatClicks(link.clickCount)}</Typography>
+                  </Box>
+                  <Box sx={{ display: 'flex', gap: 0.5, alignItems: 'center' }}>
+                    <IconButton 
+                      size="small" 
+                      disabled={isAnyDeleting}
+                      onClick={() => navigate(`/analytics/${link.shortCode}`)} 
+                      title="Analytics"
+                    >
+                      <BarChartIcon fontSize="small" />
+                    </IconButton>
+                    {isThisDeleting ? (
+                      <Box sx={{ display: 'flex', p: 0.75 }}>
+                        <CircularProgress size={20} color="error" />
+                      </Box>
+                    ) : (
+                      <IconButton 
+                        size="small" 
+                        disabled={isAnyDeleting}
+                        onClick={() => handleDelete(link.shortCode)} 
+                        title="Delete" 
+                        color="error"
+                      >
+                        <DeleteOutlineIcon fontSize="small" />
+                      </IconButton>
+                    )}
+                  </Box>
+                </Paper>
+              );
+            })
           )}
         </Box>
       </Box>
