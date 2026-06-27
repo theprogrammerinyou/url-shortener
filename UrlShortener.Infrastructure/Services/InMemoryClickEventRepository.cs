@@ -7,6 +7,12 @@ namespace UrlShortener.Infrastructure.Services;
 public sealed class InMemoryClickEventRepository : IClickEventRepository
 {
     private readonly ConcurrentBag<ClickEvent> _events = new();
+    private readonly Func<string, string?>? _getUserIdByShortCode;
+
+    public InMemoryClickEventRepository(Func<string, string?>? getUserIdByShortCode = null)
+    {
+        _getUserIdByShortCode = getUserIdByShortCode;
+    }
 
     public Task AddAsync(ClickEvent clickEvent)
     {
@@ -23,6 +29,10 @@ public sealed class InMemoryClickEventRepository : IClickEventRepository
     public Task<IReadOnlyList<ClickEvent>> GetByUserIdAsync(string userId, DateTime? since = null)
     {
         var results = _events.AsEnumerable();
+        if (_getUserIdByShortCode != null)
+        {
+            results = results.Where(x => string.Equals(_getUserIdByShortCode(x.ShortCode), userId, StringComparison.OrdinalIgnoreCase));
+        }
         if (since.HasValue)
         {
             results = results.Where(x => x.ClickedAt >= since.Value);

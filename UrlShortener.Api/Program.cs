@@ -116,14 +116,15 @@ builder.Services.AddControllers();
 var neonConnectionString = builder.Configuration.GetConnectionString("Neon");
 var defaultConnectionString = builder.Configuration.GetConnectionString("DefaultConnection");
 var redisConnectionString = builder.Configuration.GetConnectionString("Redis");
-if (string.IsNullOrWhiteSpace(defaultConnectionString))
-    throw new InvalidOperationException("Missing connection string: DefaultConnection");
-if (string.IsNullOrWhiteSpace(redisConnectionString))
-    throw new InvalidOperationException("Missing connection string: Redis");
 
 var rawConnectionString = !string.IsNullOrWhiteSpace(neonConnectionString)
     ? neonConnectionString
     : defaultConnectionString;
+
+if (string.IsNullOrWhiteSpace(rawConnectionString))
+    throw new InvalidOperationException("Missing connection string: DefaultConnection or Neon");
+if (string.IsNullOrWhiteSpace(redisConnectionString))
+    throw new InvalidOperationException("Missing connection string: Redis");
 
 var connectionString = ConvertPostgresUriToConnectionString(rawConnectionString);
 var formattedRedisConnectionString = ConvertRedisUriToStackExchangeFormat(redisConnectionString);
@@ -216,19 +217,6 @@ app.UseMiddleware<UrlShortener.Api.Middleware.ExceptionHandlingMiddleware>();
 app.UseHttpsRedirection();
 app.UseRateLimiter();
 app.UseAuthentication();
-
-// Custom JWT middleware — populates HttpContext.User & Items from Bearer token
-app.Use(async (context, next) =>
-{
-    var middleware = new UrlShortener.Api.Middleware.JwtAuthMiddleware(
-        next,
-        context.RequestServices.GetRequiredService<ILogger<UrlShortener.Api.Middleware.JwtAuthMiddleware>>(),
-        jwtKey,
-        jwtIssuer,
-        jwtAudience);
-    await middleware.InvokeAsync(context);
-});
-
 app.UseAuthorization();
 app.MapControllers();
 
@@ -303,8 +291,7 @@ static string ConvertPostgresUriToConnectionString(string connectionString)
                 Database = database,
                 Username = username,
                 Password = password,
-                SslMode = SslMode.Require,
-                TrustServerCertificate = true
+                SslMode = SslMode.Require
             };
 
             return builder.ConnectionString;

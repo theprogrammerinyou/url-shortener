@@ -23,8 +23,7 @@ public sealed class RedirectController : ControllerBase
         {
             var referrer = Request.Headers.Referer.ToString();
             var country = Request.Headers["CF-IPCountry"].FirstOrDefault()
-                ?? Request.Headers["X-Country-Code"].FirstOrDefault()
-                ?? "India";
+                ?? Request.Headers["X-Country-Code"].FirstOrDefault();
             var originalUrl = await _service.ResolveAsync(shortCode, referrer, country);
             return Redirect(originalUrl);
         }
