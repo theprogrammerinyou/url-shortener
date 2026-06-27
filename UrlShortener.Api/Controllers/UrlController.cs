@@ -1,4 +1,5 @@
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.AspNetCore.RateLimiting;
 using UrlShortener.Core.Contracts;
 using UrlShortener.Core.DTOs;
 
@@ -16,6 +17,7 @@ public sealed class UrlController : ControllerBase
     }
 
     [HttpPost("shorten")]
+    [EnableRateLimiting("WriteTrafficPolicy")]
     public async Task<IActionResult> CreateShortUrlAsync([FromBody] CreateShortUrlRequest request)
     {
         if (request == null)

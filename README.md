@@ -17,6 +17,7 @@ A simple URL shortener built with .NET 10.0 using a clean architecture approach.
 - **Privacy Controls**: Custom aliases validation and private links toggling to hide links from public directories.
 - **Refactoring to Low-Level Design (LLD)**: Restructured core models (e.g. `UrlEntry` replacing `UrlMapping`), abstractions (e.g. `IUrlRepository` and `IKeyGenerator`), and repositories mapping to Neon serverless PostgreSQL.
 - **Secure Guest Access**: Secured data retrieval ensuring a user's local IP-based unique guest fingerprint restricts access so they cannot see another user's links.
+- **Client IP-Partitioned Rate Limiting**: Added ASP.NET Core rate limiting middleware to control API request volumes. Write traffic (URL creation) uses a client IP-partitioned Token Bucket policy (10 tokens max, refills 5/minute). Read traffic (URL redirection) uses a client IP-partitioned Sliding Window Counter policy (100 requests/minute split across 6 segments).
 
 ## Project Structure
 - `Client` - contains the react code combined with MUI and React Router

@@ -2,6 +2,8 @@ using System.Text;
 using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.IdentityModel.Tokens;
+using Microsoft.AspNetCore.RateLimiting;
+using System.Threading.RateLimiting;
 using Npgsql;
 using UrlShortener.Core.Contracts;
 using UrlShortener.Core.Services;
@@ -56,6 +58,55 @@ builder.Services.AddCors(options =>
         policy.WithOrigins(allowedOrigins)
               .AllowAnyHeader()
               .AllowAnyMethod();
+    });
+});
+
+// ── Rate Limiting ──────────────────────────────────────────────────────────
+builder.Services.AddRateLimiter(options =>
+{
+    options.RejectionStatusCode = StatusCodes.Status429TooManyRequests;
+    options.OnRejected = async (context, token) =>
+    {
+        context.HttpContext.Response.ContentType = "application/json";
+        await context.HttpContext.Response.WriteAsync("{\"error\": \"Too many requests. Please try again later.\"}", token);
+    };
+
+    options.AddPolicy("WriteTrafficPolicy", context =>
+    {
+        var ipAddress = context.Request.Headers["X-Forwarded-For"].FirstOrDefault()
+            ?? context.Connection.RemoteIpAddress?.ToString()
+            ?? "unknown-ip";
+        if (ipAddress.Contains(','))
+        {
+            ipAddress = ipAddress.Split(',')[0].Trim();
+        }
+        return RateLimitPartition.GetTokenBucketLimiter(ipAddress, _ => new TokenBucketRateLimiterOptions
+        {
+            TokenLimit = 10,
+            QueueLimit = 0,
+            ReplenishmentPeriod = TimeSpan.FromMinutes(1),
+            TokensPerPeriod = 5,
+            AutoReplenishment = true
+        });
+    });
+
+    options.AddPolicy("ReadTrafficPolicy", context =>
+    {
+        var ipAddress = context.Request.Headers["X-Forwarded-For"].FirstOrDefault()
+            ?? context.Connection.RemoteIpAddress?.ToString()
+            ?? "unknown-ip";
+        if (ipAddress.Contains(','))
+        {
+            ipAddress = ipAddress.Split(',')[0].Trim();
+        }
+        return RateLimitPartition.GetSlidingWindowLimiter(ipAddress, _ => new SlidingWindowRateLimiterOptions
+        {
+            PermitLimit = 100,
+            QueueLimit = 0,
+            Window = TimeSpan.FromMinutes(1),
+            SegmentsPerWindow = 6,
+            AutoReplenishment = true
+        });
     });
 });
 
@@ -163,6 +214,7 @@ app.UseSwaggerUI(c =>
 
 app.UseMiddleware<UrlShortener.Api.Middleware.ExceptionHandlingMiddleware>();
 app.UseHttpsRedirection();
+app.UseRateLimiter();
 app.UseAuthentication();
 
 // Custom JWT middleware — populates HttpContext.User & Items from Bearer token

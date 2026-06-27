@@ -1,4 +1,5 @@
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.AspNetCore.RateLimiting;
 using UrlShortener.Core.Contracts;
 
 namespace UrlShortener.Api.Controllers;
@@ -15,6 +16,7 @@ public sealed class RedirectController : ControllerBase
     }
 
     [HttpGet("{shortCode}")]
+    [EnableRateLimiting("ReadTrafficPolicy")]
     public async Task<IActionResult> RedirectToOriginalAsync(string shortCode)
     {
         try

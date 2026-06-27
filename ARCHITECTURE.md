@@ -147,3 +147,46 @@ The character set contains 62 alphanumeric characters: `a-z` (26), `A-Z` (26), a
 3.  **String Construction**: These characters are joined to build a 7-character string.
     *   A 7-character Base62 string yields $62^7 \approx 3,521,614,606,208$ (3.5 Trillion) unique combinations.
 4.  **Collision Handling**: The generator retries up to 5 times if a collision is found in the database.
+
+---
+
+## 7. Rate Limiting Strategy
+
+To protect the system from resource exhaustion, brute-force requests, and abuse, client IP-partitioned rate limiting middleware is integrated into the request pipeline.
+
+### A. Client IP Resolution
+To handle reverse proxy environments (such as Netlify, Render, or Cloudflare), the rate limiter parses the `X-Forwarded-For` HTTP header:
+- It checks if the header contains one or more comma-separated IP addresses, selecting the leftmost IP (the actual client).
+- If the header is missing, it falls back to the connection's standard `RemoteIpAddress`.
+- This ensures rate limits partition traffic accurately per user instead of applying globally to all clients of a reverse proxy.
+
+### B. Policies & Algorithms
+
+#### 1. Creation / Write Traffic (`WriteTrafficPolicy`)
+- **Algorithm**: **Token Bucket**
+- **Endpoint**: `POST /api/url/shorten`
+- **Configuration**:
+  - **Bucket Capacity**: 10 tokens.
+  - **Refill Rate**: 5 tokens per 1-minute replenishment period.
+  - **Queue Limit**: 0 (rejected immediately if bucket is empty).
+- **Rationale**: Token Bucket allows for handling sudden burst traffic (up to 10 requests at once) while smoothly restricting sustained creation requests to an average of 5 per minute.
+
+#### 2. Redirection / Read Traffic (`ReadTrafficPolicy`)
+- **Algorithm**: **Sliding Window Counter**
+- **Endpoint**: `GET /{shortCode}`
+- **Configuration**:
+  - **Permit Limit**: 100 permits per 1-minute window.
+  - **Segments**: 6 segments per window (10-second segments).
+  - **Queue Limit**: 0.
+- **Rationale**: Redirection is high-throughput but vulnerable to denial of service. Sliding Window Counter provides a smooth rate window of 100 requests per minute without the sudden "reset window" burst issues of Fixed Window.
+
+### C. Rejection Behavior
+When a client exceeds the allocated rate limit, the middleware intercepts the call:
+- Sets the HTTP response status to `429 Too Many Requests`.
+- Sets the Content-Type to `application/json`.
+- Writes a standardized error payload:
+  ```json
+  {
+    "error": "Too many requests. Please try again later."
+  }
+  ```
