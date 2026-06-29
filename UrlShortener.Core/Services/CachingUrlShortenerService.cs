@@ -59,31 +59,26 @@ public sealed class CachingUrlShortenerService : IUrlShortenerService
                 throw new InvalidOperationException("Short URL has expired.");
             }
 
-            // Fire-and-forget or background task to record the redirect in DB & analytics
-            // so we don't block the critical path of redirecting the user.
-            _ = Task.Run(async () =>
+            try
             {
-                try
-                {
-                    await _inner.ResolveAsync(shortCode, referrer, country);
-                    // Refresh cache with new click count
-                    var latestDetails = await _inner.GetDetailsAsync(shortCode);
-                    var entry = new UrlEntry(
-                        latestDetails.ShortCode,
-                        latestDetails.LongUrl,
-                        latestDetails.ExpiresAt,
-                        latestDetails.IsCustom,
-                        latestDetails.UserId,
-                        latestDetails.ClickCount,
-                        latestDetails.IsPrivate,
-                        latestDetails.QrScanCount);
-                    await SetEntryCacheAsync(entry);
-                }
-                catch
-                {
-                    // Suppress exceptions in background task to avoid crash
-                }
-            });
+                await _inner.ResolveAsync(shortCode, referrer, country);
+                // Refresh cache with new click count
+                var latestDetails = await _inner.GetDetailsAsync(shortCode);
+                var entry = new UrlEntry(
+                    latestDetails.ShortCode,
+                    latestDetails.LongUrl,
+                    latestDetails.ExpiresAt,
+                    latestDetails.IsCustom,
+                    latestDetails.UserId,
+                    latestDetails.ClickCount,
+                    latestDetails.IsPrivate,
+                    latestDetails.QrScanCount);
+                await SetEntryCacheAsync(entry);
+            }
+            catch
+            {
+                // Do not block redirect if cache/db write fails
+            }
 
             return urlEntry.OriginalUrl;
         }
