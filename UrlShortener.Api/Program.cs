@@ -137,13 +137,22 @@ builder.Services.AddScoped<IUrlRepository, EntityFrameworkUrlRepository>();
 builder.Services.AddScoped<IClickEventRepository, EntityFrameworkClickEventRepository>();
 builder.Services.AddScoped<IUserProfileRepository, EntityFrameworkUserProfileRepository>();
 builder.Services.AddSingleton<IKeyGenerator, Base62KeyGenerator>();
-builder.Services.AddScoped<IUrlShortenerService>(sp =>
+builder.Services.AddScoped<UrlShortenerService>(sp =>
 {
     var repository = sp.GetRequiredService<IUrlRepository>();
     var generator = sp.GetRequiredService<IKeyGenerator>();
     var clickEvents = sp.GetRequiredService<IClickEventRepository>();
+    return new UrlShortenerService(repository, generator, clickEvents, baseUrl);
+});
+builder.Services.AddScoped<IUrlShortenerService>(sp =>
+{
+    var coreService = sp.GetRequiredService<UrlShortenerService>();
     var cache = sp.GetService<Microsoft.Extensions.Caching.Distributed.IDistributedCache>();
-    return new UrlShortenerService(repository, generator, clickEvents, baseUrl, cache);
+    if (cache == null)
+    {
+        return coreService;
+    }
+    return new CachingUrlShortenerService(coreService, cache);
 });
 builder.Services.AddScoped<IDashboardService, DashboardService>();
 builder.Services.AddScoped<IAnalyticsService>(sp =>
